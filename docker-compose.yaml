@@ -1,0 +1,23 @@
+version: "3.4"
+
+services:
+  docker-in-docker:
+    image: docker:dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR:
+    expose:
+      - 2375
+
+  vault-secrets-operator:
+    build:
+      context: .
+      dockerfile: Dockerfile.build
+      
+    image: vault-secrets-operator:build
+    environment:
+      DOCKER_HOST: tcp://docker-in-docker:2375
+      IMAGE_TAG_BASE: europe-docker.pkg.dev/salto-artifacts/private-docker/vault-secrets-operator 
+    env_file:
+      - build.env
+    tty: true
