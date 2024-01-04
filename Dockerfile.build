@@ -1,0 +1,7 @@
+FROM saltosystems/go-builder:31c0c2f
+
+ENV PKGPATH github.com/saltosystems/vault-secrets-operator
+
+# copy current workspace
+WORKDIR ${GOPATH}/src/${PKGPATH}
+COPY . ${GOPATH}/src/${PKGPATH}
