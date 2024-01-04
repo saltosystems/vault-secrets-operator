@@ -1,0 +1,51 @@
+name: "vault-secrets-operator build"
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v3
+      - name: init
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          [[ $GITHUB_REF == refs/tags/* ]] && (echo "VERSION=$(echo ${GITHUB_REF#refs/*/} | sed -e 's/^[[v]]*//')" >> build.env) # if it's a tag, override VERSION variable
+      - name: prepare
+        run: |
+          docker compose up -d --build
+      - name: sanity-check
+        run: |
+          docker compose exec -T vault-secrets-operator make check-fmt
+          docker compose exec -T vault-secrets-operator go mod tidy
+      - name: build
+        run: docker compose exec -T vault-secrets-operator make ci-build ci-docker-build
+      - id: auth
+        name: authentication
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: google-github-actions/auth@v1
+        with:
+          token_format: access_token
+          workload_identity_provider: projects/965526508485/locations/global/workloadIdentityPools/github/providers/openid-connect
+          service_account: github-actions@salto-artifacts.iam.gserviceaccount.com
+          access_token_lifetime: '600s'
+      - name: release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          docker compose exec -T vault-secrets-operator bash -c "echo '${{ steps.auth.outputs.access_token }}' | docker login -u oauth2accesstoken --password-stdin https://europe-docker.pkg.dev"
+          docker compose exec -T vault-secrets-operator make docker-push
+      - name: clean
+        run: |
+          docker compose exec -T vault-secrets-operator make clean
+          docker compose down -v
